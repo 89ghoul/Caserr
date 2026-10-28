@@ -391,6 +391,7 @@ async function rTrade(){
  const on=!!cloud;
  $('tnote').textContent=on?'Trade by code. Each code works once, so send it to one friend.':'Log in to trade with other players. Your words still save on your account.';
  $('tbox').style.display=on?'':'none';if(!on)return;
+ try{await cloud.collection('trades').doc('CHECK-0000').get();$('tnote').textContent='Connected as '+(NM[uid]||'player')+'. Trade by code. Each code works once, so send it to one friend.'}catch(e){$('tnote').textContent='Server error: '+((e&&e.code)||e.message)+'. Check the Firestore rules are published and Email/Password is on, then reload.';return}
  $('tsel').innerHTML=S.inv.filter(i=>!i.lk).sort((a,b)=>b.p-a.p).slice(0,120).map(i=>`<div data-k="${i.uid}">${card(i,i.uid===tsel?'sel':'')}</div>`).join('')||'<p class="note">No unlocked words to send.</p>';
  const mine=S.tr||[];
  if(!mine.length){$('tmine').innerHTML='<p class="note">No pending trades.</p>';return}
@@ -403,7 +404,7 @@ async function rTrade(){
 $('tsel').onclick=e=>{const d=e.target.closest('[data-k]');if(!d)return;tsel=+d.dataset.k;sfx.tick();rTrade()};
 $('mkoffer').onclick=async()=>{if(tb)return;if(!cloud){$('offermsg').textContent='Log in first to trade.';return}let it=S.inv.find(i=>i.uid===tsel);if(!it||it.lk)it=S.inv.find(i=>!i.lk);if(!it){$('offermsg').textContent='You have no unlocked word to send.';return}tsel=it.uid;
 tb=1;const code=newCode();
-try{await cloud.collection('trades').doc(code).create({from:uid,status:'open',offer:{n:it.n,tag:it.tag||0,sh:it.sh?1:0},ts:Date.now()});
+try{const ref=cloud.collection('trades').doc(code);await cloud.runTransaction(async tx=>{const s=await tx.get(ref);if(s.exists)throw new Error('exists');tx.set(ref,{from:uid,status:'open',offer:{n:it.n,tag:it.tag||0,sh:it.sh?1:0},ts:Date.now()})});
  S.inv=S.inv.filter(i=>i.uid!==it.uid);S.tr=(S.tr||[]).concat([{c:code,n:it.n,tag:it.tag||0,sh:it.sh?1:0}]);tsel=0;head();
  $('offermsg').innerHTML='Trade code: <b style="font-size:18px">'+code+'</b>. Send it to one friend. Your word is held until they accept or you cancel.';sfx.sell()}
 catch(e){$('offermsg').textContent='Could not create the code: '+((e&&e.code)||e.message)}
@@ -416,7 +417,7 @@ try{const s=await cloud.collection('trades').doc(code).get();
   if(d.from===uid)$('tpreview').innerHTML='<p class="note">That is your own code. Find it under My trades.</p>';
   else if(d.status!=='open')$('tpreview').innerHTML='<p class="note">That trade is already finished.</p>';
   else{tp={code,offer:d.offer};renderPreview()}}}
-catch(e){toast('Could not look that up')}
+catch(e){toast('Lookup failed: '+((e&&e.code)||e.message))}
 tb=0};
 $('tcode').onkeydown=e=>{if(e.key==='Enter')$('tlook').onclick()};
 $('tpreview').onclick=async e=>{const g=e.target.closest('[data-g]');if(g){tgive=+g.dataset.g;renderPreview();return}if(e.target.closest('#accbtn'))await acceptTrade()};
@@ -430,7 +431,7 @@ async function acceptTrade(){
  tb=1;
  try{await cloud.runTransaction(async tx=>{const s=await tx.get(ref);if(!s.exists)throw new Error('gone');const d=s.data();if(d.status!=='open'||d.from===uid)throw new Error('taken');tx.update(ref,{status:'accepted',taker:uid,ret})});
   S.inv=S.inv.filter(i=>i.uid!==give.uid);add(got);tp=null;tgive=null;$('tpreview').innerHTML='';$('tcode').value='';sfx.win(3);head();toast('Trade done! You got '+got.n)}
- catch(e){toast(e.message==='taken'||e.message==='gone'?'That code was already used or is gone':'Trade failed, nothing changed')}
+ catch(e){toast(e.message==='taken'||e.message==='gone'?'That code was already used or is gone':'Trade failed: '+((e&&e.code)||e.message))}
  tb=0;rTrade()}
 $('tmine').onclick=async e=>{const cl=e.target.closest('[data-claim]'),ca=e.target.closest('[data-cancel]');if((!cl&&!ca)||tb||!cloud)return;
  const code=cl?cl.dataset.claim:ca.dataset.cancel,ref=cloud.collection('trades').doc(code);tb=1;let got=null;
@@ -439,7 +440,7 @@ $('tmine').onclick=async e=>{const cl=e.target.closest('[data-claim]'),ca=e.targ
   else{if(d.status!=='open'||d.from!==uid)throw new Error('notopen');got=d.offer;tx.update(ref,{status:'cancelled'})}});
   const it=got&&hyd({uid:0,n:got.n,tag:Math.min(10,Math.max(0,got.tag|0)),sh:got.sh?1:0});
   if(it)add(it);S.tr=(S.tr||[]).filter(r=>r.c!==code);sfx.win(3);head();toast(cl?(it?'Received '+it.n:'Received'):'Cancelled, word returned')}
- catch(err){toast(err.message==='notaccepted'?'They have not accepted yet':err.message==='notopen'?'That trade can no longer be cancelled':'Could not update that trade')}
+ catch(err){toast(err.message==='notaccepted'?'They have not accepted yet':err.message==='notopen'?'That trade can no longer be cancelled':'Could not update that trade: '+((err&&err.code)||err.message))}
  tb=0;rTrade()};
 
 /* balance, profile, games */
@@ -449,7 +450,7 @@ const rk=i=>i.r*1e9+(i.sh?5e8:0)+(i.tag?(11-i.tag)*1e7:0)+i.p;
 function bestOf(l){let b=null;for(const i of l)if(!b||rk(i)>rk(b))b=i;return b}
 function codeOf(id){let h1=2166136261,h2=5381;for(const ch of String(id)){h1=Math.imul(h1^ch.charCodeAt(0),16777619)>>>0;h2=(Math.imul(h2,33)+ch.charCodeAt(0))>>>0}const A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let k=0;k<4;k++){s+=A[h1%32];h1=Math.floor(h1/32)}for(let k=0;k<4;k++){s+=A[h2%32];h2=Math.floor(h2/32)}return s.slice(0,4)+'-'+s.slice(4)}
 let bshown=null;function setBal(){document.documentElement.setAttribute('data-theme',S.theme||'dark');const p=$('balp'),to=S.bal;if(bshown!==null&&to!==bshown){p.classList.remove('up','dn');void p.offsetWidth;p.classList.add(to>bshown?'up':'dn')}bshown=to;$('balv').textContent=$$(to).slice(1)}
-async function rProfile(){const on=!!cloud;$('mypf').innerHTML=pfp(S.pfp);$('lout').style.display=FBMODE&&uid?'':'none';$('lin').style.display=FBMODE&&!uid?'':'none';$('themes').innerHTML=['dark','purple','green','white'].map(k=>`<button class="thb ${S.theme===k?'on':''}" data-th="${k}">${k[0].toUpperCase()+k.slice(1)}</button>`).join('');const b=bestOf(S.inv.concat(S.safe));$('mybest').innerHTML=b?card(b):'<p class="note">Open cases to get a word.</p>';
+async function rProfile(){const on=!!cloud;$('mypf').innerHTML=pfp(S.pfp);$('themes').innerHTML=['dark','purple','green','white'].map(k=>`<button class="thb ${S.theme===k?'on':''}" data-th="${k}">${k[0].toUpperCase()+k.slice(1)}</button>`).join('');const b=bestOf(S.inv.concat(S.safe));$('mybest').innerHTML=b?card(b):'<p class="note">Open cases to get a word.</p>';
 $('myname').textContent=on?(NM[uid]||'You'):'Guest player';$('mycode').textContent=on?codeOf(uid):'sign in to get one';
 $('pfpick').innerHTML=PF.map((e,i)=>`<button data-p="${i}" class="pfb ${S.pfp===i?'on':''}">${e}</button>`).join('');$('fbox').style.display=on?'':'none';if(!on)return;
 const fr=S.friends.slice(0,60),docs=await Promise.all(fr.map(f=>cloud.doc('profiles/'+f).get().then(s=>s.exists?s.data():null).catch(()=>null)));
