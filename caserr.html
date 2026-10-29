@@ -224,7 +224,6 @@ select{font:inherit;padding:9px;border-radius:6px;border:1px solid var(--b);back
 <section id="v5" hidden>
 <div class="panel"><div class="me"><div class="pf" id="mypf"></div><div><b id="myname"></b><div class="note">Friend code: <b id="mycode"></b> <button id="cpy" style="padding:3px 8px">Copy</button></div></div></div>
 <button id="lout" style="margin-bottom:8px">Log out</button><div class="note">Theme</div><div class="row" id="themes"></div><div class="note">Pick a profile picture</div><div class="row" id="pfpick"></div><b>My rarest word</b><div id="mybest" style="max-width:220px;margin-top:6px"></div></div>
-<div class="panel" style="margin:8px 0"><b>Codes</b><div class="row"><input id="code" placeholder="Enter a code"><button class="go" id="redeem">Redeem</button></div><div class="note" id="codemsg"></div></div>
 <div class="panel" id="fbox"><b>Friends</b><div class="row"><input id="fcode" placeholder="Friend code, e.g. ABCD-2345"><button class="go" id="fadd">Add friend</button></div><div class="grid" id="flist" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))"></div></div>
 </section>
 <section id="v6" hidden><div class="panel" id="upbox"></div></section>
@@ -552,10 +551,6 @@ fx.style.display='none';fx.innerHTML='';
 try{for(const it of got.filter(x=>x.r===11))await cinema(it)}catch(e){}
 busy=0;rerender()}
 $('bgo').onclick=battle;
-/* codes */
-const CODES=new Map([['mattiaskitties',()=>{S.bal=rd(S.bal+500000000);return'Added $500,000,000'}],['ballhog89',()=>{add(hyd({uid:0,n:'developer',tag:0,sh:1}));return'Added the shiny God word: developer'}]]);
-$('redeem').onclick=()=>{const k=$('code').value.trim().toLowerCase(),f=CODES.get(k);if(!f){$('codemsg').textContent='That code does not exist.';sfx.lose();return}const m=f();$('code').value='';$('codemsg').textContent=m;sfx.win(3);head();rerender()};
-$('code').onkeydown=e=>{if(e.key==='Enter')$('redeem').onclick()};
 /* All or Nothing roulette */
 function aonSpin(it){return new Promise(res=>{if(qDone){res();return}const fx=$('fx'),god=it.r===11,k=god?0:1+Math.floor(Math.random()*9);
 fx.style.display='flex';fx.style.setProperty('--c','#ff3df2');
